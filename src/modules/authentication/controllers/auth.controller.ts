@@ -1,24 +1,10 @@
-import {
-  Body,
-  Controller,
-  Get,
-  Param,
-  Post,
-  UseGuards,
-  Req,
-} from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Req } from '@nestjs/common';
 import { Request } from 'express';
 import { AuthService } from '../services/auth.service';
 import { GET_CURRENT_USER } from 'src/shared/decorators/get_current_user';
 import { UserDto, UsernameDto } from '../../users/dtos/user.dto';
 import { GenTokenDto } from '../dtos/generate_token.dto';
-import {
-  ForgotOtpDto,
-  OtpSignInDto,
-  ResendDto,
-  ResetOtpDto,
-} from '../dtos/otp_signin.dto';
-import { VerifyOtpDto } from '../dtos/veriy_otp.dto';
+import { OtpSignInDto, ResetOtpDto } from '../dtos/otp_signin.dto';
 import Users from 'src/modules/users/entities/user.entity';
 
 @Controller('auth')
@@ -48,26 +34,10 @@ export class AuthController {
     return this.auth_service.username_check(user, user_check);
   }
 
-  @Post()
-  sign_token(@Body() payload: GenTokenDto) {
-    return this.auth_service.generate_access_token(payload);
-  }
-
-  @Get('user-x-token/:token')
-  get_user_by_signed_token(@Param('token') token: string) {
-    return this.auth_service.get_user_by_signed_token(token);
-  }
-
   @Post('login')
   request_user_otp(@Body() payload: OtpSignInDto, @Req() req: Request) {
     return this.auth_service.login(payload, this.get_client_ip(req));
   }
-
-  // @Post('forgot-password')
-  // @UseGuards(OtpVerifiedGuard)
-  // forgot_password(@Body() payload: ForgotOtpDto, @Req() req: Request) {
-  //   return this.auth_service.forgot_password(payload, this.get_client_ip(req));
-  // }
 
   @Post('reset-password')
   reset_password(
@@ -75,15 +45,5 @@ export class AuthController {
     @Body() payload: ResetOtpDto,
   ) {
     return this.auth_service.reset_password(user, payload);
-  }
-
-  @Post('send-otp')
-  send_otp(@Body() payload: ResendDto, @Req() req: Request) {
-    return this.auth_service.send_otp(payload, this.get_client_ip(req));
-  }
-
-  @Post('verify-otp')
-  verify_otp(@Body() payload: VerifyOtpDto) {
-    return this.auth_service.verify_otp(payload);
   }
 }

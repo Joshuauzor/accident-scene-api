@@ -7,7 +7,6 @@ import { PassportModule } from '@nestjs/passport';
 import { JwtStrategy } from './jwt/jwt-strategy';
 import { configs } from '../../../config/config.env';
 import { UserModule } from '../users/user.module';
-import { OAuthService } from './services/oauth.service';
 import { ActionsGuard } from './guards/actions-guard';
 import { AccessTokenService } from './services/access-token.service';
 import { AuthenticatedUserService } from './services/authenticated-user.service';
@@ -20,7 +19,6 @@ import { AuthenticatedUserService } from './services/authenticated-user.service'
     JwtService,
     JwtStrategy,
     AuthService,
-    OAuthService,
     ActionsGuard,
     {
       provide: APP_GUARD,
@@ -33,7 +31,6 @@ import { AuthenticatedUserService } from './services/authenticated-user.service'
     JwtService,
     JwtStrategy,
     AuthService,
-    OAuthService,
     ActionsGuard,
   ],
   imports: [

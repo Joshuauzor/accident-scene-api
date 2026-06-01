@@ -20,7 +20,7 @@ import { FindDataRequestDto } from 'src/shared/utils/dtos/find.data.request.dto'
 import { PaginationData } from 'src/shared/types/pagination';
 import { search_filter } from 'src/shared/utils/pagination';
 import { Transaction } from 'sequelize';
-import { UpdateEmailData, UsersDto } from '../interface/users.inteface';
+import { UpdateEmailData, CreateUserInput } from '../interface/users.inteface';
 import { Sequelize } from 'sequelize-typescript';
 import { AccountStatus } from 'src/shared/enums/roles';
 import {
@@ -97,21 +97,6 @@ export class UserService {
     ) {
       return true;
     }
-    if (
-      exist?.username?.toLocaleLowerCase() ===
-      user_dto?.username?.toLocaleLowerCase()
-    ) {
-      throw new HttpException(
-        'Sorry! Kindly use a different username. 🙂',
-        HttpStatus.PRECONDITION_FAILED,
-      );
-    }
-    if (exist?.phone_number === user_dto?.phone_number) {
-      throw new HttpException(
-        'Sorry! Kindly use a different phone number. 🙂',
-        HttpStatus.PRECONDITION_FAILED,
-      );
-    }
   }
 
   private normalize_name_part(name: string): string {
@@ -161,14 +146,13 @@ export class UserService {
     return bcrypt.hash(password, salt);
   }
 
-  async add_user(
-    user_dto: UsersDto,
+  async create_user(
+    user_dto: CreateUserInput,
     transaction?: Transaction,
   ): Promise<Omit<Users, 'password'>> {
     try {
-      const exist = await this.user_repo.search_user(
-        user_dto,
-        null,
+      const exist = await this.user_repo.find_by_email(
+        user_dto.email,
         transaction,
       );
 
@@ -178,43 +162,12 @@ export class UserService {
         return exist;
       }
 
-      if (!user_dto?.username?.trim()) {
-        user_dto.username = user_dto?.full_name?.trim()
-          ? ((await this.generate_username(
-              user_dto.full_name,
-              false,
-              transaction,
-            )) as string)
-          : await this.generate_fallback_username(user_dto.email, transaction);
-      } else {
-        user_dto.username = this.sanitize_username(user_dto.username);
-        if (!user_dto.username) {
-          user_dto.username = await this.generate_fallback_username(
-            user_dto.email,
-            transaction,
-          );
-        }
-      }
-
       user_dto.password = await this.hash_password(user_dto.password);
 
       const create_payload: Partial<Users> = {
         email: user_dto.email,
-        username: user_dto.username,
         password: user_dto.password,
-        full_name: user_dto.full_name ?? null,
-        phone_number: user_dto.phone_number ?? null,
-        account_status: user_dto.account_status,
-        ...(user_dto.is_active !== undefined && {
-          is_active: user_dto.is_active,
-        }),
-        ...(user_dto.oauth_provider !== undefined && {
-          oauth_provider: user_dto.oauth_provider,
-        }),
-        ...(user_dto.provider_id !== undefined && {
-          provider_id: user_dto.provider_id,
-        }),
-        ...(user_dto.image !== undefined && { image: user_dto.image }),
+        role: user_dto.role,
       };
       const created = await this.save(create_payload, transaction);
 
@@ -225,6 +178,32 @@ export class UserService {
         HttpStatus.BAD_REQUEST,
       );
     }
+  }
+
+  async user_dashboard(user: Users, find_opts: any) {
+    let target_user_id = user.id;
+
+    if (find_opts?.user_id) {
+      if (!this.is_valid_uuid(find_opts.user_id)) {
+        throw new HttpException(
+          'Invalid user ID format',
+          HttpStatus.PRECONDITION_FAILED,
+        );
+      }
+      target_user_id = find_opts.user_id;
+    }
+
+    const current_user_id = target_user_id !== user.id ? user.id : undefined;
+
+    return {
+      current_user_id,
+    };
+  }
+
+  private is_valid_uuid(uuid: string): boolean {
+    const uuid_regex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    return uuid_regex.test(uuid);
   }
 
   async generate_username(
@@ -340,39 +319,8 @@ export class UserService {
   find_by_id(id: string, current_user_id?: string, transaction?: Transaction) {
     const query_options: any = { where: { id } };
 
-    const computed_attributes = [
-      [
-        Sequelize.literal(`(${UserSqlQueries.HAS_PASSCODE(id)})`),
-        'has_passcode',
-      ],
-    ];
-
-    if (current_user_id && current_user_id !== id) {
-      computed_attributes.push(
-        [
-          Sequelize.literal(
-            `(${UserSqlQueries.IS_FOLLOWING(current_user_id, id)})`,
-          ),
-          'is_following',
-        ],
-        [
-          Sequelize.literal(
-            `(${UserSqlQueries.I_BLOCKED_USER(current_user_id, id)})`,
-          ),
-          'i_blocked_user',
-        ],
-        [
-          Sequelize.literal(
-            `(${UserSqlQueries.USER_BLOCKED_ME(current_user_id, id)})`,
-          ),
-          'user_blocked_me',
-        ],
-      );
-    }
-
     query_options.attributes = {
       exclude: ['password'],
-      include: computed_attributes,
     };
 
     return this.find_one(query_options, transaction);

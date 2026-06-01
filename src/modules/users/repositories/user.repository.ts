@@ -45,50 +45,13 @@ export class UserRepository {
     });
   }
 
-  find_by_email_or_username(
-    email_or_username: string,
-    transaction?: Transaction,
-  ): Promise<Users> {
+  find_by_email(email: string, transaction?: Transaction): Promise<Users> {
     return this.find_one(
       {
         where: {
-          [Op.or]: [
-            { email: email_or_username },
-            { username: email_or_username },
-          ],
+          email,
         },
-        attributes: ['id', 'email', 'username', 'full_name'],
-      },
-      transaction,
-    );
-  }
-
-  search_user(
-    user_dto: Partial<Pick<Users, 'email' | 'username' | 'phone_number'>>,
-    exclude_user_id?: string,
-    transaction?: Transaction,
-  ): Promise<Users | null> {
-    const or_conditions = [
-      ...(user_dto?.email ? [{ email: user_dto.email }] : []),
-      ...(user_dto?.username ? [{ username: user_dto.username }] : []),
-      ...(user_dto?.phone_number
-        ? [{ phone_number: user_dto.phone_number }]
-        : []),
-    ];
-    if (or_conditions.length === 0) return Promise.resolve(null);
-    const where: any = {
-      [Op.and]: [
-        ...(exclude_user_id ? [{ id: { [Op.not]: exclude_user_id } }] : []),
-        { [Op.or]: or_conditions },
-      ],
-    };
-    return this.find_one(
-      {
-        where,
-        attributes: {
-          exclude: ['password', 'createdAt', 'updatedAt', 'deletedAt'],
-        },
-        raw: true,
+        attributes: ['id', 'email', 'role'],
       },
       transaction,
     );

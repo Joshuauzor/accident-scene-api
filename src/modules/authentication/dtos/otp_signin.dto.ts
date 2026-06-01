@@ -10,25 +10,25 @@ import User from '../../users/entities/user.entity';
 import { Match } from 'src/modules/users/dtos/user.dto';
 import { Transform } from 'class-transformer';
 
-export class OtpSignInDto extends User {
+export class SignInDto extends User {
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsEmail()
   @IsNotEmpty()
-  email: string;
+  declare email: string;
 
   @IsString()
   @IsNotEmpty()
   @MinLength(6)
   @MaxLength(20)
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
-  password: string;
+  declare password: string;
 }
 
 export class ForgotOtpDto extends User {
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsEmail()
   @IsNotEmpty()
-  email: string;
+  declare email: string;
 
   @IsString()
   @IsNotEmpty()
@@ -39,7 +39,7 @@ export class ForgotOtpDto extends User {
     message:
       'Password must be 6+ characters, include uppercase, lowercase and at least a number or symbol.',
   })
-  password: string;
+  declare password: string;
 
   @IsString()
   @IsNotEmpty()
@@ -78,5 +78,5 @@ export class ResendDto extends User {
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsEmail()
   @IsNotEmpty()
-  email: string;
+  declare email: string;
 }

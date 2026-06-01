@@ -6,9 +6,9 @@ export class GenTokenDto extends User {
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsEmail()
   @IsNotEmpty()
-  email: string;
+  declare email: string;
 
   @IsString()
   @IsNotEmpty()
-  password: string;
+  declare password: string;
 }

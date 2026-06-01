@@ -1,16 +1,6 @@
-export enum Roles {
-  USER = 'user',
-}
-
-export enum AdminRoles {
-  ADMIN = 'Admin',
-  USER = 'User',
-  SUPER_ADMIN = 'Superadmin',
-}
-
-export enum AccountType {
-  REGULAR = 'regular',
-  CREATOR = 'creator',
+export enum UserRole {
+  ADMIN = 'admin',
+  AGENT = 'agent',
 }
 
 export enum AccountStatus {
@@ -19,4 +9,12 @@ export enum AccountStatus {
   PENDING_PROFILE = 'pending_profile',
   SUSPENDED = 'suspended',
   DEACTIVATED = 'deactivated',
+}
+
+export enum InterventionType {
+  MEDICAL = 'medical',
+  FIRE = 'fire',
+  TRAFFIC = 'traffic',
+  STRUCTURAL = 'structural',
+  OTHER = 'other',
 }

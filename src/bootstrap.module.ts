@@ -10,7 +10,6 @@ import { BootService } from './bootstrap.service';
 import { BootController } from './bootstrap.controller';
 import { CustomRateLimitMiddleware } from './shared/middlewares/rate-limiter';
 import { AuthModule } from './modules/authentication/auth.module';
-import { EventModule } from './modules/events/event.module';
 
 @Module({
   imports: [
@@ -41,16 +40,6 @@ import { EventModule } from './modules/events/event.module';
     GlobalModule,
     DatabaseModule,
     AuthModule,
-    ReferralModule,
-    EventModule,
-    PostsModule,
-    NotificationModule,
-    RolesPermissionModule,
-    EmailModule,
-    TransactionModule,
-    MediaUploadModule,
-    MarketPlaceModule,
-    SearchModule,
   ],
   controllers: [BootController],
   providers: [

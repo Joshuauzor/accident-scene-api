@@ -6,21 +6,15 @@ import {
   HttpException,
   HttpStatus,
   Param,
-  ParseUUIDPipe,
   Patch,
-  Post,
   Query,
   Req,
 } from '@nestjs/common';
 import { Request } from 'express';
-import { UserService } from '/src/modules/users/services/user.service';
+import { UserService } from '../services/user.service';
 import { GET_CURRENT_USER } from 'src/shared/decorators/get_current_user';
 import Users from 'src/modules/users/entities/user.entity';
-import {
-  ProfileDto,
-  SuspendUserDto,
-  UpdatePhoneDto,
-} from 'src/modules/users/dtos/user.dto';
+import { ProfileDto, UpdatePhoneDto } from 'src/modules/users/dtos/user.dto';
 import { SearchFilterOptions } from 'src/shared/types/types';
 import { FindDataRequestDto } from 'src/shared/utils/dtos/find.data.request.dto';
 
@@ -48,23 +42,6 @@ export class UserController {
     return this.user_service.update_profile(user, payload);
   }
 
-  // @Patch('email-profile')
-  // @UseGuards(OtpVerifiedGuard)
-  // update_email_profile(
-  //   @GET_CURRENT_USER() user: Users,
-  //   @Body() payload: UpdateEmailDto,
-  // ) {
-  //   return this.user_service.update_email_profile(user, payload);
-  // }
-
-  @Patch('phone-profile')
-  update_phone_profile(
-    @GET_CURRENT_USER() user: Users,
-    @Body() payload: UpdatePhoneDto,
-  ) {
-    return this.user_service.update_phone_profile(user, payload);
-  }
-
   @Get('search')
   search_users(@Query() find_opts: FindDataRequestDto) {
     const filter_options: SearchFilterOptions = {
@@ -77,23 +54,6 @@ export class UserController {
   @Get('current-user')
   get_user_info(@GET_CURRENT_USER() user: Users, @Query() find_opts) {
     return this.user_service.user_dashboard(user, find_opts);
-  }
-
-  @Post(':user_id/suspend')
-  suspend_user(
-    @Param('user_id', ParseUUIDPipe) target_user_id: string,
-    @GET_CURRENT_USER() actor: Users,
-    @Body() body: SuspendUserDto,
-  ) {
-    return this.user_service.suspend_user(actor, target_user_id, body);
-  }
-
-  @Post(':user_id/unsuspend')
-  unsuspend_user(
-    @Param('user_id', ParseUUIDPipe) target_user_id: string,
-    @GET_CURRENT_USER() actor: Users,
-  ) {
-    return this.user_service.unsuspend_user(actor, target_user_id);
   }
 
   @Delete('account')

@@ -18,18 +18,13 @@ module.exports = {
     timeout: 30000,
   },
   pool: {
-    max: configs.NODE_ENV === 'production' ? 1 : 5, // 1 connection per Lambda instance in prod
-    min: 0, // Don't maintain idle connections (Lambda-specific optimization)
-    acquire: 30000, // 30 seconds to acquire connection (reduced from 60s for faster failure)
-    idle: 5000, // Close idle connections after 5s (aggressive for Lambda)
-    evict: 1000, // Check for idle connections every 1s (aggressive cleanup)
-    handleDisconnects: true, // Auto-reconnect on disconnect
-    // Lambda-specific: Don't create connections during bootstrap
-    // Connections are created on-demand when first query is executed
+    max: configs.NODE_ENV === 'production' ? 1 : 5,
+    min: 0,
+    acquire: 30000,
+    idle: 5000,
+    evict: 1000,
+    handleDisconnects: true,
   },
-  // Lambda optimization: Defer connection until first query
-  // This reduces cold start time by not connecting to DB during bootstrap
-  // Connection will be established lazily when first database operation occurs
   logging: configs.USE_DATABASE_LOG ? (): void => {} : false,
   ssl: configs.NODE_ENV === 'test',
   autoLoadModels: true,
