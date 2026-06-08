@@ -18,7 +18,7 @@ export class Tenant extends Model<Tenant> {
   @PrimaryKey
   @Default(DataType.UUIDV4)
   @Column(DataType.UUID)
-  declareid: string;
+  declare id: string;
 
   @Column({ type: DataType.STRING, allowNull: false })
   name: string;

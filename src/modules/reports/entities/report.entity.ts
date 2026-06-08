@@ -5,17 +5,15 @@ import {
   DataType,
   BelongsTo,
   ForeignKey,
-  CreatedAt,
-  UpdatedAt,
   PrimaryKey,
   Default,
 } from 'sequelize-typescript';
 import { Tenant } from 'src/modules/tenants/entities/tenant.entity';
 import User from 'src/modules/users/entities/user.entity';
-import { InterventionType } from 'src/shared/enums/roles';
+import { InterventionType, ReportStatus } from 'src/shared/enums/roles';
 
 @Table({ tableName: 'gle_incident_reports', underscored: true })
-export class IncidentReport extends Model {
+export class IncidentReport extends Model<IncidentReport> {
   @PrimaryKey
   @Default(DataType.UUIDV4)
   @Column(DataType.UUID)
@@ -23,23 +21,23 @@ export class IncidentReport extends Model {
 
   @ForeignKey(() => Tenant)
   @Column({ type: DataType.UUID, allowNull: false })
-  tenantId: string;
+  tenant_id: string;
 
   @BelongsTo(() => Tenant)
   tenant: Tenant;
 
   @ForeignKey(() => User)
   @Column({ type: DataType.UUID, allowNull: false })
-  userId: string;
+  user_id: string;
 
   @BelongsTo(() => User)
   user: User;
 
   @Column({ type: DataType.STRING, allowNull: false })
-  firstName: string;
+  first_name: string;
 
   @Column({ type: DataType.STRING, allowNull: false })
-  lastName: string;
+  last_name: string;
 
   @Column({ type: DataType.STRING, allowNull: false })
   location: string;
@@ -53,9 +51,17 @@ export class IncidentReport extends Model {
       InterventionType.STRUCTURAL,
       InterventionType.OTHER,
     ],
-    allowNull: false,
+    allowNull: true,
   })
-  interventionType: InterventionType;
+  intervention_type: InterventionType | null;
+
+  @Column({
+    type: DataType.ENUM,
+    values: [ReportStatus.STEP_1, ReportStatus.COMPLETED],
+    allowNull: false,
+    defaultValue: ReportStatus.STEP_1,
+  })
+  status: ReportStatus;
 
   @Column({
     type: DataType.DATE,

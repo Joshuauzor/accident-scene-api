@@ -7,7 +7,6 @@ import {
 } from '@nestjs/common';
 import { UserService } from 'src/modules/users/services/user.service';
 import Users from 'src/modules/users/entities/user.entity';
-
 import { AccessTokenService } from './access-token.service';
 
 @Injectable()
@@ -40,13 +39,6 @@ export class AuthenticatedUserService {
     if (!user) {
       throw new HttpException('Invalid token', HttpStatus.UNAUTHORIZED);
     }
-
-    // if (is_blocked_account_status(user.account_status)) {
-    //   throw new HttpException(
-    //     get_blocked_account_message(user.account_status),
-    //     HttpStatus.FORBIDDEN,
-    //   );
-    // }
 
     return this.to_safe_user(user);
   }

@@ -1,4 +1,4 @@
-const dataSource = require('./sequelize/datasource');
+const dataSource = require('./connection/datasource');
 import { Module } from '@nestjs/common';
 import { SequelizeModule } from '@nestjs/sequelize';
 

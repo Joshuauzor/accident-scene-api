@@ -218,7 +218,7 @@ class EnvConfig {
     // SERVER
     obj.IS_OFFLINE = Boolean(process.env.IS_OFFLINE);
     obj.NODE_ENV = process.env.NODE_ENV as NodeENV;
-    obj.SERVER_NAME = process.env.SERVER_NAME || 'CliqMit';
+    obj.SERVER_NAME = process.env.SERVER_NAME || 'accident-scene-api';
     obj.SERVER_PORT = process.env.SERVER_PORT
       ? +process.env.SERVER_PORT
       : 50050;

@@ -1,14 +1,10 @@
-import { randomBytes } from 'crypto';
 import { Redis } from 'ioredis';
 import * as bcrypt from 'bcrypt';
-import { sign } from 'jsonwebtoken';
 import { Injectable, Inject, HttpException, HttpStatus } from '@nestjs/common';
-import { configs } from '../../../../config/config.env';
 import { DateTime } from 'src/shared/utils/datetime';
-import { EventEmitter2 } from '@nestjs/event-emitter';
 import { UserService } from '../../users/services/user.service';
-import { UserDto, UsernameDto } from '../../users/dtos/user.dto';
-import { GenTokenDto } from '../dtos/generate_token.dto';
+import { UserDto } from '../../users/dtos/user.dto';
+import { TenantService } from '../../tenants/services/tenant.service';
 import { EmailUtils } from 'src/shared/utils/email.utils';
 import { JwtPayload, TokenUserClaims } from '../jwt/jwt-payload.model';
 import { AccessTokenService } from './access-token.service';
@@ -16,16 +12,7 @@ import { AuthenticatedUserService } from './authenticated-user.service';
 import Users from '../../users/entities/user.entity';
 import { UserRole } from 'src/shared/enums/roles';
 import { SignInDto } from '../dtos/otp_signin.dto';
-
-import {
-  ResetOtpDto,
-  OtpSignInDto,
-  ResendDto,
-  ForgotOtpDto,
-} from '../dtos/otp_signin.dto';
-import { VerifyOtpDto } from '../dtos/veriy_otp.dto';
 import { Sequelize } from 'sequelize-typescript';
-import { AccountStatus } from 'src/shared/enums/roles';
 
 interface LoginAttempt {
   count: number;
@@ -36,227 +23,22 @@ interface LoginAttempt {
 
 @Injectable()
 export class AuthService {
-  private readonly jwt_private_key: string;
-  private readonly otp_expiry_time: number;
   private readonly MAX_ATTEMPTS = 5;
   private readonly LOCK_DURATION = 15 * 60 * 1000;
-  private readonly OTP_MAX_REQUESTS = 3;
-  private readonly OTP_WINDOW_MS = 15 * 60 * 1000;
-  private readonly OTP_VERIFY_MAX_ATTEMPTS = 5;
-  private readonly OTP_VERIFY_WINDOW_MS = 15 * 60 * 1000;
-  private readonly MAX_OTP_REQUESTS_PER_IP = 10;
   private readonly MAX_LOGIN_ATTEMPTS_PER_IP = 20;
-  private readonly MAX_PASSWORD_RESET_PER_IP = 5;
   private readonly IP_RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
 
   constructor(
     @Inject('REDIS_CLIENT') private readonly redis_client: Redis,
-    private auth_events: EventEmitter2,
     private sequelize: Sequelize,
     private readonly user_service: UserService,
+    private readonly tenant_service: TenantService,
     private readonly access_token_service: AccessTokenService,
     private readonly authenticated_user_service: AuthenticatedUserService,
-  ) {
-    this.jwt_private_key = configs.JWT_SECRET;
-    this.otp_expiry_time = 10 * 60 * 1000;
-  }
-
-  static generate_otp(length: number): string {
-    const digits = '0123456789';
-    let OTP = '';
-
-    while (OTP.length < length) {
-      OTP += digits[Math.floor(Math.random() * digits.length)];
-    }
-
-    return OTP;
-  }
-
-  async generate_and_store_otp(email: string, length: number): Promise<string> {
-    const otp = AuthService.generate_otp(length);
-    const expiration_time = this.otp_expiry_time / 1000;
-    await this.redis_client.set(
-      `otp:${email}`,
-      JSON.stringify({ otp }),
-      'EX',
-      expiration_time,
-    );
-    return otp;
-  }
-
-  async can_request_otp(email: string, type?: string): Promise<boolean> {
-    const key = `${type || 'otp'}_requests:${email}`;
-    const request_count = await this.redis_client.get(key);
-
-    return (parseInt(request_count) || 0) > this.OTP_MAX_REQUESTS;
-  }
-
-  async record_otp_request(email: string, type?: string): Promise<void> {
-    const key = `${type || 'otp'}_requests:${email}`;
-    const request_count = parseInt((await this.redis_client.get(key)) || '0');
-
-    if (request_count === 0) {
-      await this.redis_client.set(key, '1', 'PX', this.OTP_WINDOW_MS);
-    } else {
-      await this.redis_client.incr(key);
-    }
-  }
-
-  async can_verify_otp(email: string): Promise<boolean> {
-    const key = `otp_verify_attempts:${email}`;
-    const attempt_count = await this.redis_client.get(key);
-    return (parseInt(attempt_count) || 0) >= this.OTP_VERIFY_MAX_ATTEMPTS;
-  }
-
-  async record_otp_verify_attempt(
-    email: string,
-    success: boolean,
-  ): Promise<void> {
-    const key = `otp_verify_attempts:${email}`;
-    if (success) {
-      await this.redis_client.del(key);
-    } else {
-      const attempt_count = parseInt((await this.redis_client.get(key)) || '0');
-      if (attempt_count === 0) {
-        await this.redis_client.set(key, '1', 'PX', this.OTP_VERIFY_WINDOW_MS);
-      } else {
-        await this.redis_client.incr(key);
-      }
-    }
-  }
-
-  async can_request_by_ip(
-    ip: string,
-    type: 'otp' | 'login' | 'password_reset',
-  ): Promise<boolean> {
-    const limits = {
-      otp: this.MAX_OTP_REQUESTS_PER_IP,
-      login: this.MAX_LOGIN_ATTEMPTS_PER_IP,
-      password_reset: this.MAX_PASSWORD_RESET_PER_IP,
-    };
-    const key = `ip_rate_limit:${type}:${ip}`;
-    const count = parseInt((await this.redis_client.get(key)) || '0');
-    return count >= limits[type];
-  }
-
-  async record_ip_request(
-    ip: string,
-    type: 'otp' | 'login' | 'password_reset',
-  ): Promise<void> {
-    const key = `ip_rate_limit:${type}:${ip}`;
-    const count = parseInt((await this.redis_client.get(key)) || '0');
-    if (count === 0) {
-      await this.redis_client.set(key, '1', 'PX', this.IP_RATE_LIMIT_WINDOW_MS);
-    } else {
-      await this.redis_client.incr(key);
-    }
-  }
+  ) {}
 
   get_user_by_signed_token(token: string) {
     return this.authenticated_user_service.resolve_from_access_token(token);
-  }
-
-  async validate_otp(email: string, otp: string): Promise<boolean> {
-    const stored_otp_data = await this.redis_client.get(`otp:${email}`);
-    if (!stored_otp_data) return false;
-
-    const { otp: stored_otp } = JSON.parse(stored_otp_data);
-    if (stored_otp === otp) {
-      await this.redis_client.del(`otp:${email}`);
-      return true;
-    }
-    return false;
-  }
-
-  async is_otp_verified(
-    user_id: string | null,
-    email?: string,
-  ): Promise<boolean> {
-    const normalized_email = email?.toLowerCase().trim();
-
-    if (user_id) {
-      const key = `registration_verified:${user_id}`;
-      const registration_verified = await this.redis_client.get(key);
-      if (registration_verified) {
-        return true;
-      }
-    }
-
-    if (normalized_email) {
-      const key = `registration_verified:${normalized_email}`;
-      const registration_verified = await this.redis_client.get(key);
-      if (registration_verified) {
-        return true;
-      }
-    }
-
-    if (user_id) {
-      const key = `otp_verified:${user_id}`;
-      const verified_by_id = await this.redis_client.get(key);
-      if (verified_by_id) {
-        return true;
-      }
-    }
-
-    if (normalized_email) {
-      const key = `otp_verified:${normalized_email}`;
-      const verified_by_email = await this.redis_client.get(key);
-      if (verified_by_email) {
-        return true;
-      }
-    }
-
-    return false;
-  }
-
-  async has_registration_verification(
-    user_id: string | null,
-    email?: string,
-  ): Promise<boolean> {
-    const normalized_email = email?.toLowerCase().trim();
-
-    if (user_id) {
-      const key = `registration_verified:${user_id}`;
-      const registration_verified = await this.redis_client.get(key);
-      if (registration_verified) {
-        return true;
-      }
-    }
-
-    if (normalized_email) {
-      const key = `registration_verified:${normalized_email}`;
-      const registration_verified = await this.redis_client.get(key);
-      if (registration_verified) {
-        return true;
-      }
-    }
-
-    return false;
-  }
-
-  async has_recent_otp_verification(
-    user_id: string | null,
-    email?: string,
-  ): Promise<boolean> {
-    const normalized_email = email?.toLowerCase().trim();
-
-    if (user_id) {
-      const key = `otp_verified:${user_id}`;
-      const verified_by_id = await this.redis_client.get(key);
-      if (verified_by_id) {
-        return true;
-      }
-    }
-
-    if (normalized_email) {
-      const key = `otp_verified:${normalized_email}`;
-      const verified_by_email = await this.redis_client.get(key);
-      if (verified_by_email) {
-        return true;
-      }
-    }
-
-    return false;
   }
 
   async register(user: UserDto): Promise<any> {
@@ -270,16 +52,16 @@ export class AuthService {
         );
       }
 
-      user.role = UserRole.AGENT;
+      const tenant = await this.tenant_service.find_by_slug(user.tenant_slug);
 
-      const added_user = await this.user_service.create_user(user, transaction);
-
-      const normalized_reg_email = user.email.toLowerCase().trim();
-      await this.redis_client.set(
-        `registration_otp:${normalized_reg_email}`,
-        'true',
-        'EX',
-        this.otp_expiry_time / 1000,
+      const added_user = await this.user_service.create_user(
+        {
+          email: user.email,
+          password: user.password,
+          tenant_id: tenant.id,
+          role: UserRole.AGENT,
+        },
+        transaction,
       );
 
       await transaction.commit();
@@ -287,71 +69,21 @@ export class AuthService {
       const safe_user = this.strip_password(added_user);
       return {
         ...safe_user,
-        service_message: 'Registration successful. ',
+        service_message: 'Registration successful.',
       };
     } catch (error) {
       await transaction.rollback();
       throw new HttpException(
-        error?.message || 'Kindly retry in a few moment',
+        error?.message || 'Registration failed.',
         HttpStatus.BAD_REQUEST,
       );
     }
-  }
-
-  async generate_access_token(gen_token_dto: GenTokenDto) {
-    gen_token_dto.email = this.normalize_email(gen_token_dto.email);
-    const user = await this.user_service.find_by_email(gen_token_dto.email);
-
-    if (!user) {
-      throw new HttpException(
-        'Invalid email or password.',
-        HttpStatus.BAD_REQUEST,
-      );
-    }
-    const match = await bcrypt.compare(gen_token_dto.password, user.password);
-    if (!match) {
-      throw new HttpException(
-        'Invalid email or password.',
-        HttpStatus.BAD_REQUEST,
-      );
-    }
-
-    const safe_user = this.strip_password(user);
-    const access_token = this.encrypt_user_token(safe_user);
-    return { ...safe_user, tokens: { access_token } };
-  }
-
-  async sign_token(user: Users) {
-    const payload: JwtPayload = {
-      user: this.to_token_claims(user),
-    };
-    return sign(payload, this.jwt_private_key, {});
-  }
-
-  private to_token_claims(user: any): TokenUserClaims {
-    if (!user || typeof user !== 'object') return { id: '', email: '' };
-    return {
-      id: user.id ?? '',
-      email: user.email ?? '',
-    };
-  }
-
-  private strip_password(user: any): any {
-    if (!user || typeof user !== 'object') return user;
-    const rest = { ...user };
-    delete rest.password;
-    return rest;
-  }
-
-  encrypt_user_token(user: any): string {
-    const payload: JwtPayload = { user: this.to_token_claims(user) };
-    return this.access_token_service.encrypt(payload);
   }
 
   async login(dto: SignInDto, ip?: string): Promise<any> {
-    if (ip && (await this.can_request_by_ip(ip, 'login'))) {
+    if (ip && (await this.is_ip_rate_limited(ip))) {
       throw new HttpException(
-        'Too many login attempts from this IP. Please try again later.',
+        'Too many login attempts. Try again later.',
         HttpStatus.TOO_MANY_REQUESTS,
       );
     }
@@ -359,13 +91,13 @@ export class AuthService {
     const [user] = await this.user_data(dto);
 
     if (!user) {
-      if (ip) await this.record_ip_request(ip, 'login');
+      if (ip) await this.record_ip_login(ip);
       throw new HttpException('Invalid credentials.', HttpStatus.BAD_REQUEST);
     }
 
     if (await this.is_account_locked(user.email)) {
       throw new HttpException(
-        'Account is temporarily locked due to too many failed attempts. Please try again later.',
+        'Account temporarily locked. Try again later.',
         HttpStatus.TOO_MANY_REQUESTS,
       );
     }
@@ -374,97 +106,30 @@ export class AuthService {
 
     if (!is_matched) {
       await this.record_failed_login(user.email);
-      if (ip) await this.record_ip_request(ip, 'login');
+      if (ip) await this.record_ip_login(ip);
       throw new HttpException('Invalid credentials.', HttpStatus.BAD_REQUEST);
     }
 
     await this.reset_login_attempts(user.email);
 
-    const normalized_email = user.email.toLowerCase().trim();
-    await this.redis_client.del(`otp_verified:${user.id}`);
-    await this.redis_client.del(`otp_verified:${normalized_email}`);
-
-    return this.format_auth_response(user, 'login successful');
+    return this.format_auth_response(user, 'Login successful.');
   }
 
-  // async forgot_password(dto: ForgotOtpDto, ip?: string): Promise<any> {
-  //   dto.email = this.normalize_email(dto.email);
+  private async is_ip_rate_limited(ip: string): Promise<boolean> {
+    const key = `ip_rate_limit:login:${ip}`;
+    const count = parseInt((await this.redis_client.get(key)) || '0');
+    return count >= this.MAX_LOGIN_ATTEMPTS_PER_IP;
+  }
 
-  //   if (ip && (await this.can_request_by_ip(ip, 'password_reset'))) {
-  //     throw new HttpException(
-  //       'Too many password reset attempts. Please try again later.',
-  //       HttpStatus.TOO_MANY_REQUESTS,
-  //     );
-  //   }
-
-  //   const [user] = await this.user_details({
-  //     email: dto.email,
-  //   } as OtpSignInDto);
-  //   if (!user) {
-  //     if (ip) await this.record_ip_request(ip, 'password_reset');
-  //     throw new HttpException('Invalid user account.', HttpStatus.BAD_REQUEST);
-  //   }
-
-  //   const hashed_password = await bcrypt.hash(dto.confirm_password, 12);
-
-  //   await this.user_service.update_one_by_email(dto.email, {
-  //     password: hashed_password,
-  //     is_active: true,
-  //     account_status: AccountStatus.ACTIVE,
-  //   });
-
-  //   if (ip) {
-  //     await this.record_ip_request(ip, 'password_reset');
-  //   }
-
-  //   const normalized_email = user.email.toLowerCase().trim();
-  //   await this.redis_client.del(`otp_verified:${user.id}`);
-  //   await this.redis_client.del(`otp_verified:${normalized_email}`);
-  //   await this.redis_client.del(`registration_verified:${user.id}`);
-  //   await this.redis_client.del(`registration_verified:${normalized_email}`);
-
-  //   user.is_active = true;
-  //   user.account_status = AccountStatus.ACTIVE;
-  //   return this.format_auth_response(
-  //     user,
-  //     'Password successfully retrieved. 💚',
-  //   );
-  // }
-
-  // async reset_password(user: Users, dto: ResetOtpDto): Promise<string> {
-  //   const [verified_user] = await this.user_details({
-  //     email: user.email,
-  //   } as OtpSignInDto);
-  //   if (!verified_user) {
-  //     throw new HttpException('Invalid user account.', HttpStatus.BAD_REQUEST);
-  //   }
-
-  //   const is_password_valid = await bcrypt.compare(
-  //     dto.current_password,
-  //     verified_user.password,
-  //   );
-  //   if (!is_password_valid)
-  //     throw new HttpException(
-  //       'Current password is incorrect',
-  //       HttpStatus.BAD_REQUEST,
-  //     );
-
-  //   if (dto.current_password === dto.confirm_password)
-  //     throw new HttpException(
-  //       'Cannot reset password to current password, use a different password',
-  //       HttpStatus.BAD_REQUEST,
-  //     );
-
-  //   const hashed_password = await bcrypt.hash(dto.confirm_password, 12);
-
-  //   await this.user_service.update_one_by_email(user.email, {
-  //     password: hashed_password,
-  //     is_active: true,
-  //     account_status: AccountStatus.ACTIVE,
-  //   });
-
-  //   return 'Password reset successful. 💚';
-  // }
+  private async record_ip_login(ip: string): Promise<void> {
+    const key = `ip_rate_limit:login:${ip}`;
+    const count = parseInt((await this.redis_client.get(key)) || '0');
+    if (count === 0) {
+      await this.redis_client.set(key, '1', 'PX', this.IP_RATE_LIMIT_WINDOW_MS);
+    } else {
+      await this.redis_client.incr(key);
+    }
+  }
 
   async is_account_locked(email: string): Promise<boolean> {
     const attempt_data = await this.redis_client.get(`loginAttempts:${email}`);
@@ -523,24 +188,42 @@ export class AuthService {
     const { password, ...rest_of_user } = user;
     const access_token = this.encrypt_user_token(rest_of_user);
 
-    const tokens = {
-      access_token,
-      refresh_token: access_token,
-    };
-
     return {
       user: rest_of_user,
-      tokens,
+      tokens: {
+        access_token,
+        refresh_token: access_token,
+      },
       ...(service_message && { service_message }),
     };
+  }
+
+  private to_token_claims(user: any): TokenUserClaims {
+    if (!user || typeof user !== 'object') return { id: '', email: '' };
+    return {
+      id: user.id ?? '',
+      email: user.email ?? '',
+      tenant_id: user.tenant_id ?? undefined,
+      role: user.role ?? undefined,
+    };
+  }
+
+  private strip_password(user: any): any {
+    if (!user || typeof user !== 'object') return user;
+    const rest = { ...user };
+    delete rest.password;
+    return rest;
+  }
+
+  encrypt_user_token(user: any): string {
+    const payload: JwtPayload = { user: this.to_token_claims(user) };
+    return this.access_token_service.encrypt(payload);
   }
 
   user_data(dto: SignInDto) {
     return Promise.all([
       Users.scope('with_sensitive_data').findOne({
-        where: {
-          email: dto.email,
-        },
+        where: { email: dto.email },
         raw: true,
       }),
     ]);

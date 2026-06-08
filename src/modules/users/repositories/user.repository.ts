@@ -1,8 +1,7 @@
 import { InjectModel } from '@nestjs/sequelize';
 import Users from '../entities/user.entity';
-import { UserDto } from '../dtos/user.dto';
 import { calculate_pagination_data } from 'src/shared/utils/pagination';
-import { Op, Transaction } from 'sequelize';
+import { Transaction } from 'sequelize';
 import { Sequelize } from 'sequelize-typescript';
 
 export class UserRepository {
@@ -16,49 +15,14 @@ export class UserRepository {
     return this.user.findOne({ ...find_opts, transaction: tx });
   }
 
-  async find_or_create(user_dto: Partial<UserDto>): Promise<Users> {
-    const user: Users | null = await this.find_one_by_email(user_dto.email);
-    if (user) return user;
-    return this.save(user);
-  }
-
-  find_one_by_email(email: string): Promise<Users> {
-    return this.find_one({
-      where: { email },
-    });
-  }
-
-  find_one_by_email_including_deleted(
-    email: string,
-    tx?: Transaction,
-  ): Promise<Users | null> {
-    return this.user.findOne({
-      where: { email },
-      transaction: tx,
-      paranoid: false,
-    });
-  }
-
-  find_by_phone(phone_number: string): Promise<Users> {
-    return this.find_one({
-      where: { phone_number },
-    });
-  }
-
   find_by_email(email: string, transaction?: Transaction): Promise<Users> {
     return this.find_one(
       {
-        where: {
-          email,
-        },
-        attributes: ['id', 'email', 'role'],
+        where: { email },
+        attributes: ['id', 'email', 'role', 'tenant_id'],
       },
       transaction,
     );
-  }
-
-  find_x_user(find_opts: Users): Promise<Users> {
-    return this.find_one(find_opts);
   }
 
   async find_all_records(find_opts): Promise<any> {
@@ -68,37 +32,12 @@ export class UserRepository {
     const users = await this.user.findAndCountAll({
       ...find_opts,
       attributes: {
-        exclude: ['password', 'passcode'],
+        exclude: ['password'],
       },
       take,
       skip,
     });
     return calculate_pagination_data(users, skip, take);
-  }
-
-  update_one(id: string, updates: Partial<Users>): Promise<any> {
-    return this.user.update(updates, { where: { id } });
-  }
-
-  async update_one_including_deleted(
-    id: string,
-    updates: Partial<Users>,
-    tx?: Transaction,
-  ): Promise<number> {
-    const [affected] = await this.user.update(updates, {
-      where: { id },
-      transaction: tx,
-      paranoid: false,
-    });
-    return affected;
-  }
-
-  async destroy_by_id(id: string): Promise<number> {
-    const [affected] = await this.user.update(
-      { deleted_at: new Date() } as Partial<Users>,
-      { where: { id } },
-    );
-    return affected;
   }
 
   update_by_email(
@@ -112,8 +51,16 @@ export class UserRepository {
     });
   }
 
+  async destroy_by_id(id: string): Promise<number> {
+    const [affected] = await this.user.update(
+      { deleted_at: new Date() } as Partial<Users>,
+      { where: { id } },
+    );
+    return affected;
+  }
+
   async save(user: Partial<Users>, transaction?: Transaction): Promise<any> {
-    const created_user = await this.user.create(user, { transaction });
+    const created_user = await this.user.create(user as Users, { transaction });
     const plain = created_user.get({ plain: true }) as unknown as Record<
       string,
       unknown

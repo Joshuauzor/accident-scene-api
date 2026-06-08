@@ -6,7 +6,7 @@ import { BootEvents } from './shared/events/local.events';
 export class BootService {
   constructor(private boot_events: EventEmitter2) {}
   exe_health_talk(): string {
-    return '🤍🔥✨ Thumbs up Cliq Mit! ✨🔥🤍';
+    return 'ok';
   }
 
   @OnEvent(BootEvents.INIT_APP)

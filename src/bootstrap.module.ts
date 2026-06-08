@@ -10,6 +10,8 @@ import { BootService } from './bootstrap.service';
 import { BootController } from './bootstrap.controller';
 import { CustomRateLimitMiddleware } from './shared/middlewares/rate-limiter';
 import { AuthModule } from './modules/authentication/auth.module';
+import { TenantModule } from './modules/tenants/tenant.module';
+import { ReportsModule } from './modules/reports/reports.module';
 
 @Module({
   imports: [
@@ -40,6 +42,8 @@ import { AuthModule } from './modules/authentication/auth.module';
     GlobalModule,
     DatabaseModule,
     AuthModule,
+    TenantModule,
+    ReportsModule,
   ],
   controllers: [BootController],
   providers: [

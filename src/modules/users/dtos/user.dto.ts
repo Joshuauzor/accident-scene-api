@@ -44,18 +44,6 @@ export class MatchPasswordsConstraint implements ValidatorConstraintInterface {
   }
 }
 
-export class UserEncryptionDto {
-  @IsString()
-  @IsNotEmpty()
-  encryptionKey: string;
-}
-
-export class UsernameDto extends User {
-  @IsString()
-  @IsNotEmpty()
-  declare username: string;
-}
-
 export class UserDto extends User {
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsEmail()
@@ -63,21 +51,25 @@ export class UserDto extends User {
   declare email: string;
 
   @IsString()
-  declare full_name: string;
+  @IsNotEmpty()
+  @MinLength(2)
+  @MaxLength(50)
+  @Matches(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
+  @Transform(({ value }) =>
+    typeof value === 'string' ? value.trim().toLowerCase() : value,
+  )
+  tenant_slug: string;
 
   @IsString()
   @IsNotEmpty()
   @MinLength(6)
   @MaxLength(20)
-  @Matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*[\d\W_]).{6,20}$/, {
-    message:
-      'Password must be 6+ characters, include uppercase, lowercase and at least a number or symbol.',
-  })
+  @Matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*[\d\W_]).{6,20}$/)
   declare password: string;
 
   @IsString()
   @IsNotEmpty()
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
-  @Match('password', { message: 'Passwords do not match' })
+  @Match('password')
   declare confirm_password: string;
 }

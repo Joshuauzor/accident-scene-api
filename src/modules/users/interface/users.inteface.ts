@@ -1,14 +1,8 @@
 import { UserRole } from 'src/shared/enums/roles';
 
-export class CreateUserInput {
+export interface CreateUserInput {
   email: string;
-  full_name: string;
   password: string;
+  tenant_id: string;
   role?: UserRole;
-}
-
-export class UpdateEmailData {
-  current_email: string;
-  new_email: string;
-  confirm_email: string;
 }

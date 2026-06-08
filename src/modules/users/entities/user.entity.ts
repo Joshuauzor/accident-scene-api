@@ -43,7 +43,7 @@ export default class User extends Model<User> {
 
   @ForeignKey(() => Tenant)
   @Column({
-    type: DataType.STRING,
+    type: DataType.UUID,
     allowNull: true,
   })
   tenant_id: string;
